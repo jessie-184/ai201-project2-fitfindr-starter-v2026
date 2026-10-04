@@ -37,8 +37,8 @@ guessing.
 
 ### `search_listings`
 
-- **What it does:** Filters the listings data by an optional size and price ceiling, then ranks what's left by keyword overlap with the user's description and returns the best matches.
-- **Inputs:** `description` (str), keywords describing the item; `size` (str or None), where None skips size filtering; `max_price` (float or None), an inclusive ceiling where None skips price filtering. Size matching is case-insensitive and token-based: the listing's size is split on `/` and whitespace, and it matches only if one token equals the requested size exactly. So `"M"` matches `"S/M"` and `"M"`, but `"S"` does not match `"US 9"`, and `"L"` does not match `"XL"`.
+- **What it does:** Filters the listings by an optional size and price ceiling, then ranks what's left by keyword overlap with the user's description. A listing must match at least one keyword in its title, category, style tags, colors, or brand to be included; matches in the description only affect ranking, and words right after "no," "not," or "without" are ignored.
+- **Inputs:** `description` (str), keywords describing the item; `size` (str or None), where None skips size filtering; `max_price` (float or None), an inclusive ceiling where None skips price filtering. A size matches if it equals a whole `/`-separated part of the listing's size, or a single word within one, case-insensitive, never as a substring. So `"M"` matches `"S/M"`, `"W30"` matches `"W30 L30"`, but `"S"` does not match `"US 9"` and `"L"` does not match `"XL"`.
 - **Returns:** A list of up to `config.SEARCH_RESULT_LIMIT` listing dicts, sorted by keyword score (highest first). Each dict has `id`, `title`, `description`, `category`, `style_tags` (list), `size`, `condition`, `price` (float), `colors` (list), `brand` (str or None), and `platform`.
 - **When it has nothing:** Returns an empty list `[]`. The agent loop checks for `[]` and tells the user nothing matched, suggesting they loosen the size or price.
 
@@ -142,12 +142,12 @@ $ python -c "from tools import suggest_outfit; from utils.data_loader import get
 
 # Output:
 Outfit 1: Effortless Streetwear
-Pair the Vintage Levi's 501 Jeans with the White ribbed tank top and the Black cropped zip hoodie layered on top. Finish the look with the Chunky white sneakers and the Black crossbody bag.
-Vibe: Casual, 90s-inspired street style that lets the vintage denim shine.
+Pair the Vintage Levi's 501 Jeans with the White ribbed tank top and Black cropped zip hoodie for a balanced silhouette. Add the Chunky white sneakers and Black crossbody bag to complete the look.
+Vibe: Casual, 90s-inspired street style that keeps it comfortable and cool.
 
-Outfit 2: Cozy Classic
-Tuck the Oversized grey crewneck sweatshirt into the Vintage Levi's 501 Jeans, secured with the Brown leather belt. Add the Black combat boots for footwear. Note: This outfit requires socks, which are not currently in your wardrobe.
-Vibe: Relaxed, everyday comfort with a rugged edge.
+Outfit 2: Cozy Casual
+Combine the Vintage Levi's 501 Jeans with the Oversized grey crewneck sweatshirt and Brown leather belt. Finish the outfit with the Black combat boots. 
+Vibe: Laid-back and textured, perfect for cooler days.
 
 ```
 

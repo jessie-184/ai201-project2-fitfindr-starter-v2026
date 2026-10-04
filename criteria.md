@@ -22,7 +22,7 @@ Everything on this path is deterministic: regex parsing, filtering, keyword scor
 
 ---
 
-## 3. Something about state
+## 3. The item search found is the item every later tool received
 
 Across 5 different matching queries, the `id` of `session["selected_item"]` equals the `id` of the first search result, and the same `id` is the one received by both `suggest_outfit` and `create_fit_card`, checked by logging the item's `id` at the start of each tool call — 5 of 5 queries. The agent also never asks the user to name or choose the item. At least 3 of the 5 queries must have a top result that is not the first listing in the data file.
 
@@ -32,7 +32,7 @@ Passing the item along is just handing a dict from the session to the next funct
 
 ---
 
-## 4. Something about the fit card
+## 4. The fit card is grounded in the listing and varies
 
 For 3 different items, generate 3 fit cards each (9 cards total), with caching off. A card passes if it:
 - is 2–4 sentences (hashtags and emojis don't count as sentences)
@@ -48,7 +48,7 @@ The words come from the model, so I can't require exact wording, but I can requi
 
 ---
 
-## 5. Your choice
+## 5. Search results respect the size and price asked for
 
 Across 5 queries that include a size, a price ceiling, or both, every returned listing has a price at or below the ceiling and a size that matches by my token rule — 5 of 5 queries, with zero wrong listings in any result. The five
 queries must include:
