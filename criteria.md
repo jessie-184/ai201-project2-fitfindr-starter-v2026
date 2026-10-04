@@ -1,102 +1,72 @@
 # Acceptance criteria — FitFindr
 
-Five criteria that say what "working" means for this agent, written in unit 3
-**before** any results existed.
-
-An acceptance criterion names a target: a number, a count, a rate, or something
-a person could plainly observe. *"The agent handles errors"* is an opinion.
-*"When search returns nothing, the agent stops before calling the second tool,
-in 5 of 5 tries"* is a criterion.
-
-Under each one, write a sentence or two on **why that target** and not a
-stricter one. A reason that says something about your tools, your loop, or the
-data earns credit; *"80% seemed reasonable"* does not.
-
-> Missing your own targets next unit costs you nothing. Setting a target so
-> easy you can't miss it does.
-
-**Two are written for you. You write three.**
-
 ---
 
 ## 1. A matching query completes all three tools
 
-Given a query that matches at least one listing, the agent completes all three
-tool calls and returns a fit card — in at least 4 of 5 tries.
+Given a query that matches at least one listing, the agent completes all three tool calls and returns a fit card — in at least 4 of 5 tries.
 
 **Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
+
+The query is parsed with regex and the search is a plain keyword-overlap match, so a phrasing the patterns don't expect (like "30 bucks max" or "medium-sized") can lose a filter or a keyword and change what comes back. Two of the three tools also call the model, so one run in five can reasonably fail for reasons outside my code. I'm not allowing more than one miss, because everything after the search is a fixed sequence with no other branches.
 
 ---
 
 ## 2. An impossible query stops before the second tool
 
-Given a query that matches no listings, the agent stops before calling
-`suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
+Given a query that matches no listings, the agent stops before calling `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
 **Why this target:**
-<!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
-     about this path? -->
+
+Everything on this path is deterministic: regex parsing, filtering, keyword scoring, and a check for an empty list. No model is called before the branch, so the same query takes the same path every time. A single miss here would mean a bug in my loop, not randomness, so anything less than 5 of 5 would be excusing a bug.
 
 ---
 
 ## 3. Something about state
 
-<!-- YOU WRITE THIS ONE.
-
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
-
+Across 5 different matching queries, the `id` of `session["selected_item"]` equals the `id` of the first search result, and the same `id` is the one received by both `suggest_outfit` and `create_fit_card`, checked by logging the item's `id` at the start of each tool call — 5 of 5 queries. The agent also never asks the user to name or choose the item. At least 3 of the 5 queries must have a top result that is not the first listing in the data file.
 
 **Why this target:**
 
-
+Passing the item along is just handing a dict from the session to the next function, with no model involved, so it should never fail. Any mismatch is a bug. The rule about the top result not being the first listing in the file matters because the starter test commands use `load_listings()[0]`. A leftover hardcoded item would pass casual testing and only show up when the search actually picks something else.
 
 ---
 
 ## 4. Something about the fit card
 
-<!-- YOU WRITE THIS ONE.
+For 3 different items, generate 3 fit cards each (9 cards total), with caching off. A card passes if it:
+- is 2–4 sentences (hashtags and emojis don't count as sentences)
+- contains the item's actual price (written as `$24` or `$24.00`) and its platform name
+- contains no other dollar amount
 
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
+At least 8 of 9 cards pass. Separately, for each item, no two of its 3 cards
+are word-for-word identical — 3 of 3 items.
 
 **Why this target:**
 
-
+The words come from the model, so I can't require exact wording, but I can require that the facts come from the listing. I allow one miss in nine because the model sometimes formats a price oddly or drops the platform even when the prompt asks for it. The rule against other dollar amounts catches a made-up price, which is worse than a missing one. The identical-output check is 3 of 3 rather than allowing a miss because identical captions mean caching is on or temperature is 0.0. That's a config mistake, not model randomness.
 
 ---
 
 ## 5. Your choice
 
-<!-- YOU WRITE THIS ONE TOO.
-
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
-
-
+Across 5 queries that include a size, a price ceiling, or both, every returned listing has a price at or below the ceiling and a size that matches by my token rule — 5 of 5 queries, with zero wrong listings in any result. The five
+queries must include:
+- size S, where no "US 9" shoes appear
+- size L, where no XL items appear
+- size M, where "S/M" items do appear
+- a price exactly equal to a listing's price, where that listing is included
+- a size given as a word ("medium")
 
 **Why this target:**
 
-
+Filtering is deterministic code with no model involved, so one wrong listing
+means a bug, not bad luck. I'm counting individual listings rather than whole
+queries because a result with nine right items and one pair of shoes still
+looks broken to the user. The specific queries target the failures the starter
+code warns about (substring matches like "s" in "us 9" and "l" in "xl") plus
+the edges of my own spec: an inclusive price limit and the size-word mapping
+in my parser.
 
 ---
 
