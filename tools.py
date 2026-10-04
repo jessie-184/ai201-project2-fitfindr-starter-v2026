@@ -23,9 +23,34 @@ the description has to say what is *in* the list.
 import config  # noqa: F401 — you'll use this in search_listings
 from generate import generate
 from utils.data_loader import load_listings
+import re
 
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
+_STOPWORDS = {"a", "an", "the", "and", "or", "for", "with", "in", "of", "to",
+              "i", "want", "need", "looking", "some"}
+
+
+def _tokens(text: str) -> set[str]:
+    """Lowercase words, stopwords removed, simple plural 's' stripped (tees -> tee)."""
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return {w[:-1] if len(w) > 3 and w.endswith("s") else w
+            for w in words if w not in _STOPWORDS}
+
+
+def _size_matches(requested: str, listing_size) -> bool:
+    """Match a whole '/'-separated part ('S/M' -> 's', 'm'; 'US 9' -> 'us 9'),
+    or a single word within a part ('9' matches 'US 9'). Never a substring,
+    so 'S' does not match 'US 9' and 'L' does not match 'XL'."""
+    if not listing_size:
+        return False
+    req = " ".join(requested.lower().split())
+    for part in str(listing_size).lower().split("/"):
+        part = " ".join(part.split())
+        if req == part or req in part.split():
+            return True
+    return False
+
 
 def search_listings(
     description: str,
@@ -78,9 +103,42 @@ def search_listings(
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    query = _tokens(description or "")
+    if not query:
+        return []
 
+    scored = []
+    for item in load_listings():
+        if max_price is not None:
+            price = item.get("price")
+            if price is None or price > max_price:  # inclusive ceiling
+                continue
+        if size and not _size_matches(size, item.get("size")):
+            continue
+
+        # Structured fields: a match here is a real signal
+        structured = " ".join([
+            item.get("title") or "",
+            item.get("category") or "",
+            " ".join(item.get("style_tags") or []),
+            " ".join(item.get("colors") or []),
+            item.get("brand") or "",  # brand is often None
+        ])
+        core_overlap = query & _tokens(structured)
+        if not core_overlap:
+            continue  # matched only in free-text description, or not at all
+
+        # Description: supporting evidence only, with negated words removed
+        desc_text = re.sub(r"\b(?:no|not|without)\s+\w+", " ",
+                           item.get("description") or "", flags=re.IGNORECASE)
+        overlap = core_overlap | (query & _tokens(desc_text))
+
+        # One point per matched keyword, plus a bonus point if it's in the title
+        score = len(overlap) + len(query & _tokens(item.get("title") or ""))
+        scored.append((score, item))
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for _, item in scored[:config.SEARCH_RESULT_LIMIT]]
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
 
