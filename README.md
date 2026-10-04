@@ -80,6 +80,7 @@ highest score first) and continue to `suggest_outfit`, then `create_fit_card`.
 5. `selected_item` (listing dict): `search_results[0]`
 6. `outfit_suggestion` (str): from `suggest_outfit(session["selected_item"], session["wardrobe"])`
 7. `fit_card` (str): from `create_fit_card(session["outfit_suggestion"], session["selected_item"])`
+
 The user types the query once. The selected item goes from the session into both later tools and is never asked for again. Callers check `session["error"]` first: if it isn't `None`, the run ended early.
 
 ---
