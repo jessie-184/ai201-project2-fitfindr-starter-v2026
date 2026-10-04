@@ -234,6 +234,12 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
+def _format_price(price) -> str:
+    """$24 for whole numbers, $24.50 otherwise, so the caption matches criterion 4."""
+    if price is None:
+        return "an unlisted price"
+    price = float(price)
+    return f"${price:.0f}" if price.is_integer() else f"${price:.2f}"
 
 def create_fit_card(outfit: str, new_item: dict) -> str:
     """
@@ -269,5 +275,34 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return "Can't write a fit card without an outfit — run suggest_outfit first."
+
+    price_text = _format_price(new_item.get("price"))
+    platform = new_item.get("platform") or "a thrift app"
+
+    prompt = (
+        "Write a caption someone would actually post on social media about a "
+        "thrift find they just styled.\n\n"
+        f"{_describe_listing(new_item)}\n"
+        f"Price: {price_text}\n"
+        f"Platform: {platform}\n\n"
+        "How they styled it:\n"
+        f"{outfit.strip()}\n\n"
+        "Rules:\n"
+        "- 2 to 4 sentences, casual and first-person, like a real post, not a "
+        "product description.\n"
+        f"- Mention the item, the price written exactly as {price_text}, and the "
+        "platform, each exactly once.\n"
+        "- Do not mention any other dollar amount.\n"
+        "- Be specific about the vibe of the outfit; pick one look from the "
+        "styling notes rather than listing everything.\n"
+        "- You may end with up to 2 hashtags. No other text before or after the "
+        "caption."
+    )
+
+    response = generate(prompt)
+    if not response or not response.strip():
+        return (f"Couldn't write a fit card for {new_item.get('title', 'this item')} "
+                "right now. Try running it again.")
+    return response.strip()

@@ -158,7 +158,10 @@ Tuck a fitted ribbed black turtleneck into the jeans, layered under an oversized
 ```
 
 ```
-$ python -c "from tools import create_fit_card; ..."
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
+
+# Output:
+Score of a lifetime scoring these vintage Levi's 501s on depop for just $38. Threw them on with some fresh white sneakers for the ultimate off-duty streetwear vibe. I am never taking these off. #vintage #denim
 
 ```
 
