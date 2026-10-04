@@ -15,8 +15,6 @@
 >
 > All three tools are stubs, so that last command will do nothing useful yet.
 > That's the starting position.
->
-> **The rest of this file is your submission.** Fill it in as you go.
 
 ---
 
@@ -62,43 +60,28 @@ guessing.
 
 ## Planning Loop
 
-**Branch rule:** If `search_listings` returns an empty list, write a message into
-`session["message"]` that repeats the description, size, and max price that were
-searched, then return the session immediately. `suggest_outfit` and
-`create_fit_card` are not called. Otherwise, take the first result (the highest
-keyword score, since `search_listings` sorts best match first), store it as
-`session["selected_item"]`, call `suggest_outfit(selected_item, wardrobe)`, then
-call `create_fit_card(outfit, selected_item)`, and return the session.
+**Branch rule:** If `search_listings` returns an empty list, write a message into `session["error"]` that names what was searched and what the user could change (use fewer or more general keywords, try a different size or leave it out, or raise the max price), then end the loop without calling `suggest_outfit` or `create_fit_card`. Otherwise, set `session["selected_item"]` to the first result (the best keyword match, since `search_listings` sorts
+highest score first) and continue to `suggest_outfit`, then `create_fit_card`.
 
-**Where it lives:** `agent.py::run_agent` (query parsing in `agent.py::parse_query`)
+**Where it lives:** `agent.py::run_agent` (query parsing in `agent.py::parse_query`, the no-results message in `agent.py::_no_results_message`)
 
-**How the query is parsed:** Regex, no model call, so the same query always
-produces the same filters and the parsing can be tested directly.
-- `max_price`: the number after "under", "below", "less than", "max", or
-  "up to", with or without `$`, or a bare `$30`. If absent, `None` (no price filter).
-- `size`: the token after the word "size", e.g. `M`, `S/M`, `XL`, `US 9`, `10`.
-  "small", "medium", "large", and "extra large" are converted to `S`, `M`, `L`,
-  and `XL`. If absent, `None` (no size filter).
-- `description`: the query with the price and size phrases removed, leading
-  filler ("I want", "looking for", "a", "the") stripped, and punctuation removed.
-  If the description ends up empty, the search returns `[]` and the branch rule
-  handles it.
+**How the loop runs:** `run_agent` is a `while` loop over named steps (`parse` → `search` → `select` → `outfit` → `fit_card` → `done`). Each pass runs one step and chooses the next step from what that step put in the session. The only branch is after `search`: an empty result goes straight to `done`. Every pass increments a counter and calls `trace.check_iterations(count)`, which stops the run if it ever exceeds `MAX_ITERATIONS` in `config.py`.
 
-**What moves through the session:** ** One dict, created at the start of
-`run_agent` and returned at the end. Fields are added in this order:
-1. `query` (str): the raw user input
-2. `description` (str), `size` (str or None), `max_price` (float or None): from `parse_query`
-3. `results` (list of listing dicts): from `search_listings`, possibly `[]`
-4. *Branch.* If `results` is empty: `message` (str), then stop.
-5. `selected_item` (listing dict): `results[0]`
-6. `wardrobe` (dict with an `items` list): passed into `run_agent`, or
-   `get_example_wardrobe()` if none is given
-7. `outfit` (str): from `suggest_outfit(selected_item, wardrobe)`
-8. `fit_card` (str): from `create_fit_card(outfit, selected_item)`
+**How the query is parsed:** Regex, with no model call, so the same query always produces the same filters and parsing can be tested on its own.
+- `max_price`: the number after "under", "below", "less than", "max", or "up to", with or without `$`, or a bare `$30`. If none is found, `None` (no price filter).
+- `size`: the token after the word "size", e.g. `M`, `S/M`, `XL`, `US 9`, `10`. "small", "medium", "large", and "extra large" become `S`, `M`, `L`, and `XL`. If none is found, `None` (no size filter).
+- `description`: the query with the price and size phrases removed, leading filler ("I want", "looking for", "a", "the") stripped, and punctuation removed. If nothing is left, search returns `[]` and the error message asks the user to describe the item.
 
-The user types the query once. `selected_item` goes into both later tools
-straight from the session and is never asked for again.
+**What moves through the session:** One dict, created by `new_session()` at the start of `run_agent` and returned at the end. Each tool reads its inputs from the session and writes its result back, so no value is passed directly from one call to the next. Fields fill in this order:
+1. `query` (str) and `wardrobe` (dict): set when the session is created
+2. `parsed` (dict): `description` (str), `size` (str or None), `max_price` (float or None)
+3. `search_results` (list of listing dicts): from `search_listings`, possibly `[]`
+4. *Branch.* If `search_results` is empty: `error` (str), then stop. The later fields stay `None`.
+5. `selected_item` (listing dict): `search_results[0]`
+6. `outfit_suggestion` (str): from `suggest_outfit(session["selected_item"], session["wardrobe"])`
+7. `fit_card` (str): from `create_fit_card(session["outfit_suggestion"], session["selected_item"])`
 
+The user types the query once. The selected item goes from the session into both later tools and is never asked for again. Callers check `session["error"]` first: if it isn't `None`, the run ended early.
 ---
 
 ## Sample Run
@@ -111,9 +94,34 @@ straight from the session and is never asked for again.
 **One full query**
 
 ```
-$ python app.py ask '...'
+# Happy Path
+$ python app.py ask 'vintage graphic tee under $30'
+
+# Output: 
+  Found:    Graphic Tee — 2003 Tour Bootleg Style — $24.0 on depop
+
+  Outfit:
+Outfit 1: Effortless 90s streetwear
+Pair the graphic tee with your baggy straight-leg jeans and chunky white sneakers. Layer your vintage black denim jacket on top and finish with the black crossbody bag. 
+Vibe: Casual, skate-inspired street style with authentic retro attitude.
+
+Outfit 2: Edgy grunge contrast
+Tuck the tee into your wide-leg khaki trousers, wearing the brown leather belt at the waist. Add your black combat boots for footwear. Note: This outfit is complete using only your existing wardrobe pieces, but a silver chain necklace would add extra detail if you had one.
+Vibe: Cool, utilitarian grunge mixing faded graphics with structured earth tones.
+
+  Fit card: Found this absolute gem on depop for only $24 and immediately had to throw on my baggy jeans and chunky sneakers for the ultimate 90s skate vibe. The worn-in cotton feels so authentic and makes the effortless streetwear look come together with zero effort. #thriftfind #streetwear
 
 ```
+
+```
+# No Match
+$ python app.py ask 'designer ballgown size XXS under $5'
+
+# Output:
+No listings matched 'designer ballgown' (size XXS, under $5). Try fewer or more general keywords, a different size (or no size), or a higher max price.
+
+```
+
 
 **The three tools, tested one at a time**
 
@@ -169,24 +177,17 @@ Score of a lifetime scoring these vintage Levi's 501s on depop for just $38. Thr
 
 ## How I Used AI
 
-<!-- Two specific moments. What you asked, what came back, what you changed.
-
-     "I used Claude to help me code" is not enough.
-
-     "I gave Claude my search_listings spec. It returned None on no match
-     instead of an empty list, so I changed it" is the level we want. -->
-
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I ran `search_listings('graphic tee', max_price=30)` and asked Claude to double-check whether the output was correct.
+- *What came back:* Claude confirmed the filtering and ranking worked (all prices ≤ $30, the best tee match first), but pointed out three false positives at the bottom of the results: cargo pants whose description mentions "a long tee," a mesh top described as good for layering "under a graphic tee," and a crewneck whose description says "No graphics." My keyword match counted a word anywhere in the description, and it couldn't tell that "no" negates "graphics."
+- *What I changed:* I changed `search_listings` so a listing must match at least one query word in its title, category, style tags, colors, or brand to be included. Description matches now only add to the score, and words right after "no," "not," or "without" are ignored. The same query went from 7 results to 4, all of them actual tees or graphic tops. I also updated the `search_listings` line in my Tool Inventory to describe the new rule.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* After building `suggest_outfit` and `create_fit_card`, I asked Claude for more commands to test them beyond the single example in each docstring.
+- *What came back:* For `suggest_outfit`, Claude suggested running it with an empty wardrobe (`{'items': []}`) to check the general-advice path, and printing `get_example_wardrobe()` to confirm every piece the model named was one I actually own. For `create_fit_card`, it gave a shell loop to run the same input three times. All three captions came back word-for-word identical. Claude checked my `config.py`, saw `TEMPERATURE` was already 0.9, and identified the cache as the cause: `CACHE_ENABLED` is on by default, so runs two and three were getting the first answer back from `.cache`.
+- *What I changed:* I reran the three-caption test with `AI201_CACHE=0` in front of the command instead of editing `config.py`, so caching stays on while I build and saves quota. The three captions came out different and all passed my criterion 4 checks. The empty-wardrobe test returned general advice as intended, and every wardrobe piece the model named was in my wardrobe. The one issue I found was that the model flagged socks as a missing item, so I narrowed that instruction in the prompt to visible pieces like shoes, layers, and accessories.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 

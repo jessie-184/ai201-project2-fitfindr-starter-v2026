@@ -120,7 +120,8 @@ def _ask_one(query, wardrobe, use_trace):
         item = session["selected_item"] or {}
         print(f"  Found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
         print()
-        print(f"  Outfit:   {session['outfit_suggestion']}")
+        print("  Outfit:")
+        print(f"{session['outfit_suggestion']}")
         print()
         print(f"  Fit card: {session['fit_card']}")
     print()
