@@ -141,6 +141,34 @@ def search_listings(
     return [item for _, item in scored[:config.SEARCH_RESULT_LIMIT]]
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
+def _describe_listing(item: dict) -> str:
+    """Readable summary of a listing for the prompt. Skips brand when it's None."""
+    parts = [
+        f"Item: {item.get('title', 'unknown item')}",
+        f"Category: {item.get('category', 'unknown')}",
+        f"Style tags: {', '.join(item.get('style_tags') or []) or 'none'}",
+        f"Colors: {', '.join(item.get('colors') or []) or 'unknown'}",
+        f"Size: {item.get('size', 'unknown')}",
+        f"Condition: {item.get('condition', 'unknown')}",
+        f"Description: {item.get('description', '')}",
+    ]
+    if item.get("brand"):
+        parts.append(f"Brand: {item['brand']}")
+    return "\n".join(parts)
+
+
+def _describe_wardrobe_item(piece) -> str:
+    """One line per wardrobe piece, without assuming its field names."""
+    if isinstance(piece, dict):
+        fields = []
+        for key, value in piece.items():
+            if key == "id" or value in (None, "", []):
+                continue
+            if isinstance(value, list):
+                value = ", ".join(str(v) for v in value)
+            fields.append(f"{key}: {value}")
+        return "- " + "; ".join(fields)
+    return f"- {piece}"
 
 def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     """
@@ -170,8 +198,39 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    item_text = _describe_listing(new_item)
+    pieces = (wardrobe or {}).get("items") or []
+
+    if not pieces:
+        prompt = (
+            "A shopper is considering this thrifted item but hasn't shared their "
+            "wardrobe.\n\n"
+            f"{item_text}\n\n"
+            "Give general styling advice: suggest one or two complete outfits built "
+            "around this item, naming the kinds of pieces that would pair well "
+            "(bottoms, shoes, layers, accessories) and the overall vibe of each. "
+            "Keep it under 150 words, in plain text."
+        )
+    else:
+        wardrobe_text = "\n".join(_describe_wardrobe_item(p) for p in pieces)
+        prompt = (
+            "A shopper is considering this thrifted item:\n\n"
+            f"{item_text}\n\n"
+            "Here is what they already own:\n"
+            f"{wardrobe_text}\n\n"
+            "Suggest one or two outfits that combine the new item with specific "
+            "pieces from their wardrobe, naming each owned piece clearly. Only use "
+            "pieces from the list above. If an outfit needs something they don't "
+            "own, say so explicitly rather than inventing it. Give each outfit a "
+            "one-line vibe description. Keep it under 150 words, in plain text."
+        )
+
+    response = generate(prompt)
+    if not response or not response.strip():
+        # Spec requires a non-empty string, even if the model returns nothing
+        return (f"Couldn't generate outfit ideas for {new_item.get('title', 'this item')} "
+                "right now. Try running it again.")
+    return response.strip()
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
