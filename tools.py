@@ -220,11 +220,10 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
             f"{wardrobe_text}\n\n"
             "Suggest one or two outfits that combine the new item with specific "
             "pieces from their wardrobe, naming each owned piece clearly. Only use "
-            "pieces from the list above. If an outfit needs a visible piece they "
-            "don't own, such as shoes, a layer, or an accessory, say so explicitly "
-            "rather than inventing it. Don't mention basics like socks or "
-            "underwear. Give each outfit a one-line vibe description. Keep it under "
-            "150 words, in plain text."
+            "pieces from the list above, and build each outfit entirely from "
+            "those pieces plus the new item. Do not add notes about pieces the "
+            "user doesn't own or that an outfit is missing. Give each outfit a "
+            "one-line vibe description. Keep it under 150 words, in plain text."
         )
 
     response = generate(prompt)

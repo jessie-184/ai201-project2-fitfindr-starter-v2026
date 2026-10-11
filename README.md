@@ -604,30 +604,66 @@ afterward.
 
 ## The Improvement
 
-<!-- What you changed, why your diagnosis pointed at it, and the after-run in
-     the same table format. One change, measured properly.
+**What I changed:** One prompt instruction in `tools.py::suggest_outfit`, in
+the wardrobe branch. I replaced:
 
-     `python run_eval.py --label after` -->
+> "If an outfit needs a visible piece they don't own, such as shoes, a layer,
+> or an accessory, say so explicitly rather than inventing it. Don't mention
+> basics like socks or underwear."
 
-**What I changed:**
+with:
 
-**Which failure it was meant to fix:**
+> "…and build each outfit entirely from those pieces plus the new item. Do not
+> add notes about pieces the user doesn't own or that an outfit is missing."
+
+Nothing else changed: same scenarios, same temperature, caching off, five
+tries each.
+
+**Which failure it was meant to fix:** the one my diagnosis found. In 10 of 70
+before-run outfit suggestions, the model told the user an outfit needed
+something they already own, most often a belt or shoes. The mechanism was the
+"say so if they don't own it" instruction, which invited a missing-item note
+the model often got wrong. Removing the instruction removes the opportunity
+for that error.
 
 ### Run Log — After
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. A matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. An impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. The item search found is the item every later tool received (Try k = query k) | 5 of 5 queries | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. The fit card is grounded in the listing and varies (each try = 3 cards, one per item) | ≥8 of 9 cards, 3 of 3 items distinct | PASS (3/3) | PASS (3/3) | PASS (3/3) | PASS (3/3), not counted | PASS (3/3), not counted | MET (9/9 cards, 3/3 items distinct) |
+| 5. Search results respect the size and price asked for (Try k = query k) | 5 of 5 queries, 0 wrong listings | PASS | PASS | PASS | PASS | PASS | MET (5/5, 0 of 17 listings wrong) |
 
-**Did it help, and how do I know:**
+Same mapping as the before-run. Full log: `results/run_2026-10-11_0324_after.md`.
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+**Before vs. after:**
 
+| Measure | Before | After |
+|---|---|---|
+| Criteria met | 5 of 5 | 5 of 5 |
+| Outfits wrongly claiming an owned piece is missing | 10 of 70 | 0 of 70 |
+| Borderline "needs a bag/jacket" notes (owned) | 6 of 70 | 0 of 70 |
+| Socks mentioned | 1 of 70 | 0 of 70 |
+| Proposed tightened criterion 1 (≥67 of 70 outfits accurate) | MISSED (60/70) | MET (70/70) |
+
+**Did it help, and how do I know:** Yes. Running the same search on the
+after-run log found no missing-item notes in any of the 70 outfit suggestions,
+down from 10 wrong claims and 6 borderline ones. All five criteria stayed met,
+so the change didn't break anything they measure. I also checked for the
+opposite risk, the model inventing pieces the user doesn't own now that it
+can't flag missing ones, and found none.
+
+The change had costs:
+- The agent no longer points out genuinely useful missing pieces. In the
+  before-run, it correctly suggested adding a bralette under the sheer mesh
+  top, and that advice is gone.
+- Some outfits became terser, sometimes just "jeans + boots + bag" with no full
+  sentence.
+- The `**bold**` formatting from the before-run also disappeared. I didn't
+  target that, so I'm reporting it as an observation, not something the change
+  was designed to fix.
 
 
 ---
