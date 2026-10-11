@@ -259,27 +259,56 @@ that produced it:
 
 ## Loop Trace
 
-<!-- One full run, printed step by step, with the MCP call visible in it.
-
-     `python app.py ask '...' --trace` once you've added the trace.step()
-     calls in Milestone 2.
-
-     Worth pasting BOTH the happy path and the empty-search path. The empty
-     one should be visibly shorter, because it stops. If your two traces are
-     the same length, your branch isn't working — and this is the fastest way
-     anyone will ever find that out. -->
+Each run below is printed by the `trace.step()` calls in `agent.py::run_agent`,
+one per loop step. The search step is labeled `(via MCP)` because
+`search_listings` is called through `mcp_client.call_tool`.
 
 **Happy path**
 
 ```
+$ python app.py ask 'denim jacket under $50' --trace
+[1] parse_query
+      in:  denim jacket under $50
+      out: description='denim jacket', size=None, max_price=50.0
+[2] search_listings (via MCP)
+      in:  description='denim jacket', size=None, max_price=50.0
+      out: 6 items: Denim Jacket — Light Wash, Cropped, 90s Track Jacket — Navy/White Stripe, High-Waisted Denim Shorts — Cutoff … +3 more
+      →    branch: 6 results, continuing
+[3] select_item
+      in:  6 results
+      out: Denim Jacket — Light Wash, Cropped ($42.0, poshmark)
+      →    first result = best keyword match
+[4] suggest_outfit
+      in:  new_item=Denim Jacket — Light Wash, Cropped, wardrobe=10 items
+      out: Outfit 1: Double Denim Streetwear Vibe: Casual streetwear with a cool contrast. Pair the new light wash denim …
+[5] create_fit_card
+      in:  outfit=(579 chars), new_item=Denim Jacket — Light Wash, Cropped
+      out: Scored this amazing vintage Wrangler jacket for just $42 on Poshmark, and I'm obsessed with the structuredsho…
 
+2 model calls this session, 849 prompt + 203 output tokens
 ```
 
 **Empty search**
 
 ```
+$ python app.py ask 'designer ballgown size XXS under $5' --trace
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: description='designer ballgown', size='XXS', max_price=5.0
+[2] search_listings (via MCP)
+      in:  description='designer ballgown', size='XXS', max_price=5.0
+      out: [] (empty)
+      →    branch: empty, stopping before suggest_outfit
 
+  No listings matched 'designer ballgown' (size XXS, under $5). Try fewer or more general keywords, a different size (or no size), or a higher max price.
+
+0 model calls this session
 ```
+
+The empty-search trace stops at step 2, while the happy path runs all five
+steps. The branch after `search_listings` sees `[]`, writes the message into
+`session["error"]`, and ends the loop, so neither model-calling tool runs.
+
 
 **On the MCP move:** I moved `search_listings` behind an MCP server. In
 `mcp_server.py`, I registered it with FastMCP's `@mcp.tool()` decorator,
@@ -302,6 +331,86 @@ result still comes back through MCP as an empty list, not `None` or a string,
 so the branch still fires. The only visible change is that each search is a
 little slower, because `call_tool` starts and stops the server on every call.
 
+
+### Failure modes
+
+I triggered each failure on purpose and recorded what the agent said.
+
+**1. Empty search.** Query: `'designer ballgown size XXS under $5'` (the run
+shown above under Empty search). The branch was already in place from unit 3,
+so no new handler was needed. The agent stopped before `suggest_outfit` and
+printed: *"No listings matched 'designer ballgown' (size XXS, under $5). Try
+fewer or more general keywords, a different size (or no size), or a higher max
+price."*
+
+**2. Empty wardrobe.** `suggest_outfit` already returns general styling advice
+when `wardrobe["items"]` is empty, so no new handler was needed. The agent
+completed all five steps:
+
+```
+$ python app.py ask 'vintage graphic tee under $30' --empty-wardrobe --trace
+(running with an empty wardrobe)
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: description='vintage graphic tee', size=None, max_price=30.0
+[2] search_listings (via MCP)
+      in:  description='vintage graphic tee', size=None, max_price=30.0
+      out: 10 items: Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey, Y2K Baby Tee — Butterfly Print … +7 more
+      →    branch: 10 results, continuing
+[3] select_item
+      in:  10 results
+      out: Graphic Tee — 2003 Tour Bootleg Style ($24.0, depop)
+      →    first result = best keyword match
+[4] suggest_outfit
+      in:  new_item=Graphic Tee — 2003 Tour Bootleg Style, wardrobe=0 items
+      out: Outfit 1: 90s Grunge Casual. Pair the tee with relaxed-fit, light-wash distressed denim and chunky black comba…
+[5] create_fit_card
+      in:  outfit=(590 chars), new_item=Graphic Tee — 2003 Tour Bootleg Style
+      out: Found this sick 2003 tour tee on depop for only $24 and immediately had to lean into the 90s grunge aesthetic …
+
+2 model calls this session, 496 prompt + 192 output tokens
+```
+
+The outfit suggested general pieces ("relaxed-fit, light-wash distressed
+denim," "an oversized flannel shirt") without claiming the user owns them. One
+quirk: the fit card then called them "my trusty combat boots," writing a
+suggested piece as if the user already owned it.
+
+**3. Model unavailable.** I changed one character of `GEMINI_API_KEY` in
+`.env` and ran a query I hadn't asked before, so the answer couldn't come from
+the cache. Before this milestone, `app.py`'s catch-all would have printed the
+raw exception (`ModelUnavailable: ...`) without telling the user what to do. I
+added a handler in `agent.py::run_agent` that catches `ModelUnavailable` around
+both `suggest_outfit` and `create_fit_card`, writes a message into
+`session["error"]`, and stops the loop:
+
+```
+$ python app.py ask 'platform sneakers size 8' --trace
+[1] parse_query
+      in:  platform sneakers size 8
+      out: description='platform sneakers', size='8', max_price=None
+[2] search_listings (via MCP)
+      in:  description='platform sneakers', size='8', max_price=None
+      out: 1 items: Platform Sneakers — White Chunky Sole
+      →    branch: 1 results, continuing
+[3] select_item
+      in:  1 results
+      out: Platform Sneakers — White Chunky Sole ($48.0, poshmark)
+      →    first result = best keyword match
+[4] suggest_outfit
+      in:  new_item=Platform Sneakers — White Chunky Sole, wardrobe=10 items
+      out: ModelUnavailable: The model rejected your API key. Check GEMINI_API_KEY in your .env file, or create a fresh k…
+      →    model unreachable, stopping
+
+  Found Platform Sneakers — White Chunky Sole, but couldn't reach the model to suggest outfits. Check that the API key in .env is correct and that you're online, then try again.
+
+1 model calls this session
+```
+
+Search still worked because it doesn't call the model. The run stopped at
+`suggest_outfit` with a message naming what broke and what to do, with no stack
+trace, and it didn't go on to call `create_fit_card`. I restored a valid key
+afterward.
 
 
 ---
