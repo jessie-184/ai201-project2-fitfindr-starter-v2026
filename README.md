@@ -670,10 +670,26 @@ The change had costs:
 
 ## What's Still Broken
 
-<!-- For each criterion still missed: what you'd do, and why you stopped where
-     you did. "I ran out of time" is fine if it's true. Pretending nothing is
-     left is not. -->
 
+All five criteria were met before and after, so no criterion is still
+missed. These problems remain:
+
+- **Lost missing-piece advice.** The improvement removed false "you don't
+own this" claims by removing all missing-item notes, so the agent no
+longer suggests genuinely useful additions, like a bralette under a sheer
+top. A better fix would compare a suggested piece against the wardrobe
+list in code before mentioning it, so only truly missing pieces get
+flagged. I stopped at the prompt change because it fixed the measured
+failure with one change.
+- **Fit card framing.** One before-run card said "I just listed it over on
+my poshmark," as if the user were selling the item, and cards sometimes
+contain typos ("Wied it," "Scoreeeed"). Criterion 4 checks structure,
+not this kind of accuracy.
+- **Parser leftover.** "90s track jacket in size M" parses to
+`'90s track jacket in'`. It's harmless now because `_tokens` drops "in,"
+but `parse_query` should strip it.
+- **Terser outfits.** After the change, some outfits are just item lists
+("jeans + boots + bag") with no full sentence.
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
