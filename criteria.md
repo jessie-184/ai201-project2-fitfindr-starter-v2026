@@ -30,6 +30,18 @@ Across 5 different matching queries, the `id` of `session["selected_item"]` equa
 
 Passing the item along is just handing a dict from the session to the next function, with no model involved, so it should never fail. Any mismatch is a bug. The rule about the top result not being the first listing in the file matters because the starter test commands use `load_listings()[0]`. A leftover hardcoded item would pass casual testing and only show up when the search actually picks something else.
 
+> **Revised in unit 4:** Across 5 different matching queries, the item title
+> shown in the trace for the first search result (step 2), the selected item
+> (step 3), and the `new_item` passed to `suggest_outfit` and `create_fit_card`
+> (steps 4–5) is the same — 5 of 5 queries. At least 3 of the 5 queries must
+> have a top result that is not the first listing in the data file.
+>
+> **Why revised:** the original said to check by logging the item's `id` at the
+> start of each tool call, but `trace.step()` prints the item's title, not its
+> id, so the check as written couldn't be performed. Titles are unique in
+> `data/listings.json`, so comparing them identifies the same listing. The
+> target (5 of 5) is unchanged.
+
 ---
 
 ## 4. The fit card is grounded in the listing and varies

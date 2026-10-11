@@ -210,50 +210,237 @@ Score of a lifetime scoring these vintage Levi's 501s on depop for just $38. Thr
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. A matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. An impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. The item search found is the item every later tool received (Try k = query k) | 5 of 5 queries | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. The fit card is grounded in the listing and varies (each try = 3 cards, one per item) | ≥8 of 9 cards, 3 of 3 items distinct | PASS (3/3) | PASS (3/3) | PASS (3/3) | PASS (3/3), not counted | PASS (3/3), not counted | MET (9/9 cards, 3/3 items distinct) |
+| 5. Search results respect the size and price asked for (Try k = query k) | 5 of 5 queries, 0 wrong listings | PASS | PASS | PASS | PASS | PASS | MET (5/5, 0 of 17 listings wrong) |
+
+All runs come from `python run_eval.py --label before` (caching off, temperature
+0.9). The full log is in `results/run_2026-10-11_0234_before.md`.
+
+How the Try columns map to each criterion:
+- **Criteria 1 and 2:** one scenario each, and the Try columns are its five runs.
+- **Criterion 3:** the criterion specifies 5 different queries, so Try k is
+  query k (track jacket, slip dress, platform sneakers, corduroy pants, leather
+  belt). A query passes only if all five of its runs pass. The trace shows
+  titles rather than ids, and every title in the data is unique, so I checked
+  that the first search result (step 2), the selected item (step 3), and the
+  `new_item` passed to `suggest_outfit` and `create_fit_card` (steps 4–5)
+  matched (see the unit 4 revision in `criteria.md`).
+- **Criterion 4:** the criterion specifies 3 cards per item (9 total), so the
+  verdict uses tries 1–3. `run_eval.py` runs every scenario five times, and
+  tries 4–5 also passed every check (6/6 cards), but they aren't counted toward
+  the verdict because the criterion was written for 9 cards. Each card was
+  checked for 2–4 sentences (not counting hashtags), the listing's price
+  (`$24`, `$42`, `$22`), its platform name (case-insensitive), and no other
+  dollar amount.
+- **Criterion 5:** the criterion specifies 5 edge queries, so Try k is query k.
+  It also requires checking every returned listing, but the run log only shows
+  the top 3 titles and no sizes, so I verified each listing's size and price
+  with a separate check that calls `agent.py::parse_query` and
+  `search_listings` via `mcp_client.call_tool`. Search is deterministic, so all
+  five runs of each query returned the same results.
 
 **Real output from one try**, pasted as text, naming the file and function
 that produced it:
 
+**Criterion 1:** "matching query completes," Try 1, produced by
+`run_eval.py::main` running `agent.py::run_agent`:
+
+```
+- stopped early: no
+- selected_item: Graphic Tee — 2003 Tour Bootleg Style ($24.0, depop)
+- search_results: 10
+
+Fit card:
+scored this 2003 tour tee on depop for $24 and I'm obsessed with how soft it is. paired it with wide-leg khaki trousers and combat boots for that edgy grunge contrast vibe. #thriftfind #streetwear
+
+Trace:
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: description='vintage graphic tee', size=None, max_price=30.0
+[2] search_listings (via MCP)
+      in:  description='vintage graphic tee', size=None, max_price=30.0
+      out: 10 items: Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey, Y2K Baby Tee — Butterfly Print … +7 more
+      →    branch: 10 results, continuing
+[3] select_item
+      in:  10 results
+      out: Graphic Tee — 2003 Tour Bootleg Style ($24.0, depop)
+      →    first result = best keyword match
+[4] suggest_outfit
+      in:  new_item=Graphic Tee — 2003 Tour Bootleg Style, wardrobe=10 items
+      out: Outfit 1: Effortless 90s Streetwear Pair the graphic tee with your Baggy straight-leg jeans and Chunky white s…
+[5] create_fit_card
+      in:  outfit=(514 chars), new_item=Graphic Tee — 2003 Tour Bootleg Style
+      out: scored this 2003 tour tee on depop for $24 and I'm obsessed with how soft it is. paired it with wide-leg khaki…
 ```
 
+**Criterion 2:** "impossible query stops early," Try 1, produced by
+`run_eval.py::main` running `agent.py::run_agent`:
+
+```
+- stopped early: yes — No listings matched 'designer ballgown' (size XXS, under $5). Try fewer or more general keywords, a different size (or no size), or a higher max price.
+- selected_item: (none)
+- search_results: 0
+
+Trace:
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: description='designer ballgown', size='XXS', max_price=5.0
+[2] search_listings (via MCP)
+      in:  description='designer ballgown', size='XXS', max_price=5.0
+      out: [] (empty)
+      →    branch: empty, stopping before suggest_outfit
+```
+
+**Criterion 3:** "state q4 corduroy pants," Try 1, produced by
+`run_eval.py::main` running `agent.py::run_agent`. The same item appears at
+steps 2, 3, 4, and 5:
+
+```
+[1] parse_query
+      in:  corduroy pants
+      out: description='corduroy pants', size=None, max_price=None
+[2] search_listings (via MCP)
+      in:  description='corduroy pants', size=None, max_price=None
+      out: 2 items: Corduroy Wide-Leg Pants — Rust, Low-Rise Cargo Pants — Khaki
+      →    branch: 2 results, continuing
+[3] select_item
+      in:  2 results
+      out: Corduroy Wide-Leg Pants — Rust ($32.0, depop)
+      →    first result = best keyword match
+[4] suggest_outfit
+      in:  new_item=Corduroy Wide-Leg Pants — Rust, wardrobe=10 items
+      out: Outfit 1: 70s Earthy Casual Pair the corduroy wide-leg pants with the white ribbed tank top tucked in for a hi…
+[5] create_fit_card
+      in:  outfit=(709 chars), new_item=Corduroy Wide-Leg Pants — Rust
+      out: Just scored these gorgeous rust cords for $32 on depop and I am never taking them off. Styled them with an ove…
+```
+
+**Criterion 4:** the Try 1 fit card for each item, produced by
+`tools.py::create_fit_card`, called from `agent.py::run_agent` under
+`run_eval.py::main`:
+
+```
+Item A, graphic tee ($24, depop):
+Finally scored this absolute grail of a 2003 tour bootleg tee on depop for just $24 and I'm obsessed. I threw it on with some baggy straight-leg jeans and chunky white sneakers for the ultimate casual, cool, and undeniably retro vibe. #thriftfind #streetwear
+
+Item B, denim jacket ($42, Poshmark):
+Scored this vintage Wrangler jacket on Poshmark for only $42 and I'm obsessed with the cropped fit. I styled it for a high-contrast double denim look with baggy dark-wash jeans and chunky sneakers for the ultimate streetwear vibe. #ThriftFind #DenimOnDenim
+
+Item C, flannel ($22, thredUp):
+Scored this vintage Woolrich flannel on thredUp for just $22 and I am obsessed with the skater-inspired grunge look. Threw it on open over a ribbed tank and baggy jeans for the ultimate effortless 90s fit. #thriftfind #grungefashion
+```
+
+**Criterion 5:** every returned listing for the five queries, produced by
+`agent.py::parse_query` and `search_listings` via `mcp_client.call_tool`:
+
+```
+classic size S -> size = 'S' | max_price = None | 1 results
+    lst_007 | size = 'S' | $ 42.0 | Denim Jacket — Light Wash, Cropped
+
+vintage size L -> size = 'L' | max_price = None | 5 results
+    lst_010 | size = 'L' | $ 40.0 | Vintage Windbreaker — Color Block Purple/Teal
+    lst_015 | size = 'L' | $ 26.0 | Vintage Graphic Hoodie — Faded Black
+    lst_018 | size = 'M/L' | $ 38.0 | Vintage Linen Blazer — Cream
+    lst_033 | size = 'L' | $ 19.0 | Vintage Band Tee — Faded Grey
+    lst_006 | size = 'L' | $ 24.0 | Graphic Tee — 2003 Tour Bootleg Style
+
+top size M -> size = 'M' | max_price = None | 7 results
+    lst_017 | size = 'S/M' | $ 15.0 | Mesh Long-Sleeve Top — Black
+    lst_023 | size = 'S/M' | $ 22.0 | Crochet Halter Top — Cream
+    lst_002 | size = 'S/M' | $ 18.0 | Y2K Baby Tee — Butterfly Print
+    lst_020 | size = 'M' | $ 16.0 | Henley Long Sleeve — Washed Burgundy
+    lst_024 | size = 'M' | $ 18.0 | Vintage Polo Shirt — Forest Green
+    lst_029 | size = 'M' | $ 28.0 | Silk Button-Down — Sage Green
+    lst_030 | size = 'M' | $ 25.0 | Vintage Knit Vest — Argyle Brown/Cream
+
+graphic tee under $24 -> size = None | max_price = 24.0 | 3 results
+    lst_006 | size = 'L' | $ 24.0 | Graphic Tee — 2003 Tour Bootleg Style
+    lst_002 | size = 'S/M' | $ 18.0 | Y2K Baby Tee — Butterfly Print
+    lst_033 | size = 'L' | $ 19.0 | Vintage Band Tee — Faded Grey
+
+jacket size medium -> size = 'M' | max_price = None | 1 results
+    lst_004 | size = 'M' | $ 45.0 | 90s Track Jacket — Navy/White Stripe
 ```
 
 ---
 
 ## Verdicts and Diagnoses
 
-<!-- MET or MISSED per criterion against LAST UNIT's target, plus a sentence on
-     how you decided.
-
-     Then, for every miss: which of the four places it happened — a tool, the
-     loop's branch, the session, or the model's output — AND the mechanism.
-
-     Not a diagnosis:  "The fit card was bad."
-     A diagnosis:      "The fit card criterion missed on 2 of 5 items. Both had
-                        an empty brand field. My prompt puts the brand in the
-                        first sentence, so the card opened with a blank and read
-                        like a fragment. The tool worked; the prompt assumed a
-                        field that isn't always there."
-
-     Look for a pattern. Three misses on the same tool is one problem, not
-     three. -->
-
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | A matching query completes all three tools | 4 of 5 | MET (5/5) | All five tries report "stopped early: no," show all five trace steps, and end with a fit card. |
+| 2 | An impossible query stops before the second tool | 5 of 5 | MET (5/5) | All five tries stopped at step 2 with `[] (empty)`, had no outfit or fit card, and printed a message naming the keywords, size, and price to change. |
+| 3 | The item search found is the item every later tool received | 5 of 5 queries | MET (5/5) | Checked by title, per the unit 4 revision in `criteria.md`: for all five queries, in every run, the first search result (step 2), the selected item (step 3), and the `new_item` passed to `suggest_outfit` and `create_fit_card` (steps 4–5) were the same listing. None of the five was `lst_001`, the first listing in the file. |
+| 4 | The fit card is grounded in the listing and varies | ≥8 of 9 cards, 3 of 3 items distinct | MET (9/9, 3/3) | All nine cards from tries 1–3 had 2–3 sentences, the exact price, the platform name, and no other dollar amount. No item had two identical cards. |
+| 5 | Search results respect the size and price asked for | 5 of 5 queries, 0 wrong listings | MET (5/5, 0 of 17) | I checked all 17 returned listings. None had a non-matching size or a price over the ceiling: no US shoes for S, no XL for L, S/M included for M, the $24.00 tee included at the $24 boundary, and "medium" parsed as `M`. |
 
 **Diagnoses**
 
+No criterion missed, so there is no miss to diagnose. The run did surface a real
+failure that none of my five criteria measured.
 
+**Outfits claim the user doesn't own pieces they do own.** In 10 of 70 outfit
+suggestions (14%), `suggest_outfit` said or implied the outfit needed something
+already in the wardrobe. For example, track jacket q1 Try 1 said the outfit
+"needs a pair of shoes… which are not currently in your wardrobe," when the
+wardrobe has chunky white sneakers and black combat boots. Jacket size medium
+Try 4 said it "would benefit from a simple belt, which you don't currently
+own," when the wardrobe has a brown leather belt. Belts (5 runs) and shoes
+(2 runs) account for most of them. Another 6 runs said an outfit "needs" a bag
+or jacket the user owns, without directly claiming they don't own one.
+
+- **Place:** the model's output, in `tools.py::suggest_outfit`.
+- **Mechanism:** the wardrobe prompt tells the model, "If an outfit needs a
+  visible piece they don't own… say so explicitly." That rule invites a
+  missing-item note on almost every outfit, and the model often adds one even
+  though the owned piece is listed in the same prompt. The tool and the session
+  passed the right wardrobe (`wardrobe=10 items` at step 4 in every trace), so
+  the data was there; the prompt asks for a judgment the model frequently gets
+  wrong. Belts and shoes are near the end of the wardrobe list, which may be
+  why they're missed most.
+
+Smaller issues from the same run:
+- **Socks rule broken once.** Platform sneakers Try 5 said the outfit needs "a
+  pair of socks since they are not in your inventory," despite the prompt rule
+  not to mention socks.
+- **Markdown in plain-text output.** Slip dress tries 3 and 5 used `**bold**`,
+  even though the prompt asks for plain text.
+- **Fit card framing.** Track jacket q1 Try 1 said "I just listed it over on my
+  poshmark," as if the user were selling the item.
+- **Parser leftover.** "90s track jacket in size M" parsed to the description
+  `'90s track jacket in'`. It's harmless, because `_tokens` drops "in" as a
+  stopword, but `parse_query` doesn't strip "in" before "size."
+
+**Pattern:** all five criteria test the loop's plumbing (the branch, the
+session, search filters) or the structure of the fit card. None of them checks
+whether the outfit advice is accurate about the user's wardrobe, which is where
+the real failure was.
+
+**Were my targets too low?** Partly. Criteria 2, 3, and 5 test deterministic
+code (the branch, the session handoff, and the search filters), so 5 of 5 was
+the right target, and the only way to miss was a real bug. They did their job:
+they would have caught a substring size match, a hardcoded item, or a loop that
+didn't stop. Criterion 1's 4-of-5 allowance turned out to be generous, since all
+five tries passed. But my criteria were low in a different way: they set no
+bar at all for the quality of the model's output. Criterion 4 checks the fit
+card's structure (sentence count, price, platform) but not whether what it says
+is true, and no criterion checks `suggest_outfit` at all. That's why the agent
+"met" everything while telling users in 10 of 70 runs that they lacked a piece
+they own.
+
+**The criterion I'd tighten: criterion 1.** It counts a run as complete as long
+as all three tools return something, so an outfit that wrongly says "you don't
+own a belt" still passes. A tightened version:
+
+> Across all completed runs in the eval, at least 67 of 70 outfit suggestions
+> (about 95%) name only pieces from the user's wardrobe plus the new item, and
+> none claims an owned piece is missing.
+
+Against this run, that would be **MISSED (60 of 70)**. This is the failure I'm
+targeting in the improvement step.
 
 ---
 
