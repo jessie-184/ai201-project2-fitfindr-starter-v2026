@@ -281,10 +281,26 @@ that produced it:
 
 ```
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
+**On the MCP move:** I moved `search_listings` behind an MCP server. In
+`mcp_server.py`, I registered it with FastMCP's `@mcp.tool()` decorator,
+importing the real implementation from `tools.py` under an alias so the
+registered function doesn't call itself. Its description states each input's
+type and units (`max_price` is an inclusive ceiling in US dollars), how size
+matching works, the fields in each returned listing, and that it returns an
+empty list when nothing matches. The type hints match my Tool Inventory, so
+FastMCP published `description` as a required string and `size` and
+`max_price` as optional. In `agent.py::run_agent`, I replaced the direct
+`search_listings(...)` call in the `search` step with
+`call_tool("search_listings", {...})` from `mcp_client.py`, and removed the
+direct import.
+
+Nothing behaved differently afterward. `'vintage graphic tee under $30'`
+returned the same top result as in unit 3 (Graphic Tee — 2003 Tour Bootleg
+Style, $24 on depop), and `'designer ballgown size XXS under $5'` still stopped
+with the same error message and 0 model calls. That second run shows an empty
+result still comes back through MCP as an empty list, not `None` or a string,
+so the branch still fires. The only visible change is that each search is a
+little slower, because `call_tool` starts and stops the server on every call.
 
 
 
